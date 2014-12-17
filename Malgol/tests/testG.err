@@ -1,0 +1,4 @@
+print expression must be integer type
+line: 11    pos: 22
+PRINT f(1, 21)
+

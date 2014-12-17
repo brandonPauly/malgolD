@@ -1,0 +1,3 @@
+Argument type mismatch in slot 2 of 
+line: 12    pos: 15
+f(5, 10)

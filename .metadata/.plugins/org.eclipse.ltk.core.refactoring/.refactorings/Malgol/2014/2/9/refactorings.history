@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring accessors="true" comment="Delete 5 elements from project &apos;Malgol&apos;&#x0D;&#x0A;- Original project: &apos;Malgol&apos;&#x0D;&#x0A;- Original elements:&#x0D;&#x0A;     ~$Rubric.docx&#x0D;&#x0A;     newtest.exe&#x0D;&#x0A;     Rubric - Copy.docx&#x0D;&#x0A;     Rubric.docx&#x0D;&#x0A;     Rubric.pdf" description="Delete elements" element1="tests/newtest.exe" element2="tests/Rubric.pdf" element3="tests/Rubric.docx" element4="tests/~$Rubric.docx" element5="tests/Rubric - Copy.docx" elements="0" flags="589830" id="org.eclipse.jdt.ui.delete" resources="5" stamp="1393435674491" subPackages="false" version="1.0"/>
+</session>

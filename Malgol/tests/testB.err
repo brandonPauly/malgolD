@@ -1,0 +1,3 @@
+Trying to call a non-function: 
+line: 12    pos: 14
+j()

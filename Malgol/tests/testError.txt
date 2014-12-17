@@ -1,0 +1,67 @@
+
+TEST 1
+
+TEST 2
+
+TEST 3
+
+TEST 4
+
+TEST 5
+
+TEST 6
+
+TEST 7
+
+TEST 8
+
+TEST 9
+
+TEST 10
+
+TEST 11
+
+TEST 12
+
+TEST A
+Unknown function: 
+line: 11    pos: 14
+f()
+
+TEST B
+Trying to call a non-function: 
+line: 12    pos: 14
+j()
+
+TEST C
+Type mismatch in
+line: 9    pos: 9
+g := 10
+
+
+TEST D
+Not an array
+line: 11    pos: 9
+g[0]
+
+TEST E
+Argument count mismatch: 
+line: 12    pos: 14
+findmax(1, 2, 3, 4)
+
+TEST F
+Argument type mismatch in slot 2 of 
+line: 12    pos: 15
+f(5, 10)
+
+TEST G
+print expression must be integer type
+line: 11    pos: 22
+PRINT f(1, 21)
+
+
+TEST H
+Return type mismatch 
+line: 5    pos: 22
+RETURN (a - b)
+

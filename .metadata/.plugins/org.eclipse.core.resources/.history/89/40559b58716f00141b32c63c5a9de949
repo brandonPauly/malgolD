@@ -1,0 +1,372 @@
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package malgol.transform;
+
+import malgol.ast.*;
+import malgol.common.*;
+
+public class CodeGenerationVisitor implements ASTVisitor {
+
+	private static final int INDENT_AMOUNT = 20;
+	private static final int INSTRUCTION_WIDTH = 10;
+	public static final String NEWLINE = System.getProperty("line.separator");
+	public static final String INDENT = generateIndentString(INDENT_AMOUNT);
+	public static final String PRINTF_STRING = "_printf_string";
+	private final StringBuilder buf = new StringBuilder(1024);
+	private final StringBuilder temp = new StringBuilder(256);
+	private final StringBuilder result = new StringBuilder(4096);
+	private Environment env = null;
+	private boolean lvalue = false;
+	private FrameLayout fl = null;
+	private SymbolTable global = null;
+
+	public String getCode() {
+		return result.toString();
+	}
+
+	@Override
+	public void visit(BlockStatement s) {
+		env.createNewScope();
+		buf.append(generateLabels(s));
+		for (Declaration d : s.getDeclarationList()) {
+			d.accept(this);
+			fl.addLocal(4);
+		}
+		for (Statement stat : s.getStatementList()) {
+			stat.accept(this);
+		}
+		env.dropScope();
+	}
+
+	@Override
+	public void visit(AssignmentStatement s) {
+		buf.append(generateLabels(s));
+		s.getRight().accept(this);
+		buf.append(generateInstruction("movl", "%eax", "%ecx"));
+		lvalue = true;
+		s.getLeft().accept(this);
+		lvalue = false;
+		buf.append(generateInstruction("movl", "%ecx", "(%eax)"));
+	}
+
+	@Override
+	public void visit(SelectionStatement s) {
+		assert (s.getFalseBranch() instanceof SkipStatement) : "Found false branch during code generation";
+		assert (s.getTrueBranch() instanceof GotoStatement) : "Found non-jump in true branch during code generation";
+		assert (s.getTest() instanceof ConstantExpression
+				|| s.getTest() instanceof VariableExpression || s.getTest() instanceof DereferenceExpression) : "Found complex test during code generation"
+				+ s.toString();
+		GotoStatement target = (GotoStatement) s.getTrueBranch();
+		buf.append(generateLabels(s));
+		s.getTest().accept(this);
+		buf.append(generateInstruction("cmpl", "$0", "%eax"));
+		buf.append(generateInstruction("jne", target.getTarget().getName()));
+	}
+
+	@Override
+	public void visit(WhileStatement s) {
+		assert false : "Encountered while statement during code generation!";
+	}
+
+	@Override
+	public void visit(PrintStatement s) {
+		buf.append(generateLabels(s));
+		s.getExpression().accept(this);
+		buf.append(generateInstruction("movl", "%eax", "4(%esp)"));
+		buf.append(generateInstruction("movl", '$' + PRINTF_STRING, "(%esp)"));
+		buf.append(generateInstruction("call", "_printf"));
+	}
+
+	@Override
+	public void visit(SkipStatement s) {
+		buf.append(generateLabels(s));
+		buf.append(generateInstruction("nop"));
+	}
+
+	@Override
+	public void visit(GotoStatement s) {
+		buf.append(generateLabels(s));
+		buf.append(generateInstruction("jmp", s.getTarget().getName()));
+	}
+
+	@Override
+	public void visit(ArrayExpression e) {
+		assert false : "Encountered array expression during code generation";
+	}
+
+	@Override
+	public void visit(BinaryExpression e) {
+		e.getRight().accept(this);
+		buf.append(generateInstruction("movl", "%eax", "%ecx"));
+		e.getLeft().accept(this);
+		switch (e.getOperator()) {
+		case AND:
+			buf.append(generateInstruction("andl", "%ecx", "%eax"));
+			break;
+		case OR:
+			buf.append(generateInstruction("orl", "%ecx", "%eax"));
+			break;
+		case PLUS:
+			buf.append(generateInstruction("addl", "%ecx", "%eax"));
+			break;
+		case MINUS:
+			buf.append(generateInstruction("subl", "%ecx", "%eax"));
+			break;
+		case TIMES:
+			buf.append(generateInstruction("imull", "%ecx", "%eax"));
+			break;
+		case DIVIDE:
+			buf.append(generateInstruction("cltd"));
+			buf.append(generateInstruction("idivl", "%ecx"));
+			break;
+		case MOD:
+			buf.append(generateInstruction("cltd"));
+			buf.append(generateInstruction("idivl", "%ecx"));
+			buf.append(generateInstruction("movl", "%edx", "%eax"));
+			break;
+		case LESSTHAN:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setl", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		case GREATERTHAN:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setg", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		case LEQ:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setle", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		case GEQ:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setge", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		case EQUALS:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setz", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		case BANGEQUALS:
+			buf.append(generateInstruction("cmpl", "%ecx", "%eax"));
+			buf.append(generateInstruction("setnz", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		default:
+			assert false : "Unknown binary operator during code generation.";
+		}
+	}
+
+	@Override
+	public void visit(UnaryExpression e) {
+
+		e.getExpression().accept(this);
+		switch (e.getOperator()) {
+		case UMINUS:
+			buf.append(generateInstruction("negl", "%eax"));
+			break;
+		case NOT:
+			buf.append(generateInstruction("cmpl", "$0", "%eax"));
+			buf.append(generateInstruction("sete", "%al"));
+			buf.append(generateInstruction("movzbl", "%al", "%eax"));
+			break;
+		default:
+			assert false : "Unknown unary operator during code generation.";
+		}
+	}
+
+	@Override
+	public void visit(VariableExpression e) {
+		Symbol s = env.lookupInEnvironment(e.getName());
+		if (s.getType().isArray())
+			buf.append(generateInstruction("leal", s.getLocation() + "(%ebp)",
+					"%eax"));
+		else {
+			if (lvalue) {
+				buf.append(generateInstruction("leal", s.getLocation()
+						+ "(%ebp)", "%eax"));
+			} else {
+				buf.append(generateInstruction("movl", s.getLocation()
+						+ "(%ebp)", "%eax"));
+			}
+		}
+	}
+
+	@Override
+	public void visit(ConstantExpression e) {
+		buf.append(generateInstruction("movl", "$" + e.getValue(), "%eax"));
+	}
+
+	@Override
+	public void visit(Declaration d) {
+		env.insert(d);
+	}
+
+	@Override
+	public void visit(DereferenceExpression e) {
+		e.getLocation().accept(this);
+		buf.append(generateInstruction("movl", "(%eax)", "%eax"));
+	}
+
+	@Override
+	public void visit(OffsetExpression e) {
+		e.getOffset().accept(this);
+		buf.append(generateInstruction("movl", "%eax", "%ecx"));
+		e.getLocation().accept(this);
+		buf.append(generateInstruction("addl", "%ecx", "%eax"));
+	}
+
+	@Override
+	public void visit(Program p) {
+		
+		
+		/* OLD CODE 
+		env = new Environment();
+
+		// Recursive call to generate code for the body in buf.
+		p.getBlockStatement().accept(this);
+
+		// Clear result
+		result.setLength(0);
+
+		// Assembly header instructions
+		result.append(generateInstruction(".data"));
+		result.append(generateOneLabel(PRINTF_STRING));
+		result.append(generateInstruction(".ascii", "\"%d\\n\\0\""));
+		result.append(generateInstruction(".text"));
+		result.append(generateInstruction(".global _main"));
+		result.append(NEWLINE);
+
+		// Setup main entry
+		result.append(generateOneLabel("_main"));
+		result.append(generateInstruction("pushl", "%ebp"));
+		result.append(generateInstruction("movl", "%esp", "%ebp"));
+		result.append(generateInstruction("subl", "$" + env.getFrameSize(),
+				"%esp"));
+
+		// Insert code generated from recurisve call
+		result.append(buf);
+
+		// Setup main exit
+		result.append(generateInstruction("leave"));
+		result.append(generateInstruction("ret"));
+		*/
+		global = new SymbolTable();
+		result.append(generateInstruction(".data"));
+		result.append(generateOneLabel(PRINTF_STRING));
+		result.append(generateInstruction(".ascii", "\"%d\\n\\0\""));
+		result.append(generateInstruction(".text"));
+		result.append(generateInstruction(".global _main"));
+		result.append(NEWLINE);
+		for(FunctionDefinition fd : p.getFunctionList()){
+			fd.accept(this);
+		}
+	}
+
+	@Override
+	public void visit(FunctionDefinition d) {
+		
+		env = new Environment(global, d);
+		for(Declaration dec : d.getParameters()){
+			dec.accept(this);
+		}
+		fl = new FrameLayout();
+		result.append(generateOneLabel("_" + d.getName()));
+		result.append(generateInstruction("pushl", "%ebp"));
+		result.append(generateInstruction("movl", "%esp", "%ebp"));
+		d.getBody().accept(this);
+		int fSize = fl.getFrameSize();
+		result.append(generateInstruction("subl", "$" + fSize, "%esp"));
+		result.append(buf);
+		buf.setLength(0);
+	}
+
+	@Override
+	public void visit(ReturnStatement s) {
+		buf.append(generateLabels(s));
+		s.getExpression().accept(this);
+		buf.append(generateInstruction("leave"));
+		buf.append(generateInstruction("ret"));
+	}
+
+	@Override
+	public void visit(FunctionCallExpression e) {
+		int argSize = e.getArguments().size();
+		if (argSize * 4 > fl.currentOutgoingSize()){
+			fl.addOutgoing(argSize * 4 - fl.currentOutgoingSize());
+		}
+		int stackPosition = 0;
+		for (Expression exp : e.getArguments()){
+			exp.accept(this);
+			buf.append(generateInstruction("movl", "%eax", ((stackPosition > 0) ? stackPosition : "") + "(%esp)"));
+			stackPosition += 4;
+		}
+		buf.append(generateInstruction("call", "_" + e.getName()));
+	}
+
+	private static String generateIndentString(int size) {
+		String localResult = "";
+		for (int i = 0; i < size; i++) {
+			localResult += ' ';
+		}
+		return localResult;
+	}
+
+	private String generateOneLabel(String s) {
+		StringBuilder local = new StringBuilder(50);
+		int spaceCount = INDENT_AMOUNT - (s.length() + 3);
+		for (int i = 0; i < spaceCount; i++) {
+			local.append(' ');
+		}
+		local.append(s);
+		local.append(":");
+		local.append(NEWLINE);
+		return local.toString();
+	}
+
+	private String generateLabels(Statement s) {
+		temp.setLength(0);
+		for (Label l : s.getLabels()) {
+			temp.append(generateOneLabel(l.getName()));
+		}
+		return temp.toString();
+	}
+
+	private String generateInstruction(String op) {
+		temp.setLength(0);
+		temp.append(INDENT);
+		temp.append(op);
+		temp.append(NEWLINE);
+		return temp.toString();
+	}
+
+	private String generateInstruction(String op, String arg) {
+		temp.setLength(0);
+		temp.append(INDENT);
+		temp.append(op);
+		for (int pos = op.length(); pos < INSTRUCTION_WIDTH; pos++) {
+			temp.append(' ');
+		}
+		temp.append(arg);
+		temp.append(NEWLINE);
+		return temp.toString();
+	}
+
+	private String generateInstruction(String op, String arg1, String arg2) {
+		temp.setLength(0);
+		temp.append(INDENT);
+		temp.append(op);
+		for (int pos = op.length(); pos < INSTRUCTION_WIDTH; pos++) {
+			temp.append(' ');
+		}
+		temp.append(arg1);
+		temp.append(", ");
+		temp.append(arg2);
+		temp.append(NEWLINE);
+		return temp.toString();
+	}
+}

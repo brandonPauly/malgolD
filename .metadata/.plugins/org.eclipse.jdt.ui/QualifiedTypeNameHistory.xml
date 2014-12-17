@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<qualifiedTypeNameHistroy>
+<fullyQualifiedTypeName name="malgol.common.Operator"/>
+<fullyQualifiedTypeName name="java.util.LinkedList"/>
+<fullyQualifiedTypeName name="malgol.node.Token"/>
+<fullyQualifiedTypeName name="malgol.type.Type"/>
+<fullyQualifiedTypeName name="malgol.ast.Declaration"/>
+<fullyQualifiedTypeName name="malgol.common.Environment"/>
+<fullyQualifiedTypeName name="java.util.HashMap"/>
+<fullyQualifiedTypeName name="malgol.common.Symbol"/>
+<fullyQualifiedTypeName name="malgol.common.SymbolTable"/>
+<fullyQualifiedTypeName name="malgol.ast.FunctionDefinition"/>
+<fullyQualifiedTypeName name="java.lang.Integer"/>
+</qualifiedTypeNameHistroy>

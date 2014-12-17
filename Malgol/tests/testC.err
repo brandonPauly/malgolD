@@ -1,0 +1,4 @@
+Type mismatch in
+line: 9    pos: 9
+g := 10
+
